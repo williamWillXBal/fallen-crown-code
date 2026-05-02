@@ -57,6 +57,23 @@ var atk_pressed := false
 var jump_btn: Control
 var jump_center := Vector2(0, 0)
 var jump_radius := 50.0
+
+# Bouton switch d'arme (sous le bouton attaque)
+var switch_btn: Control
+var switch_center := Vector2(0, 0)
+var switch_radius := 36.0
+var switch_pressed := false
+
+# Bouton TPS (vue 3ème personne) — petit cercle en haut à droite près du settings
+var tps_btn: Control
+var tps_center := Vector2(0, 0)
+var tps_radius := 28.0
+var tps_pressed := false
+
+# Label éphémère qui affiche le nom de l'arme active après un switch
+var weapon_name_lbl: Label
+var weapon_name_timer := 0.0
+
 var crosshair: Control
 var hit_marker: Control
 var hit_timer := 0.0
@@ -135,6 +152,10 @@ func _ready():
 	look_center = Vector2(vp.x - 180, vp.y - 180)
 	atk_center = Vector2(vp.x - 180, vp.y - 360)
 	jump_center = Vector2(vp.x - 320, vp.y - 240)
+	# Bouton switch d'arme : en haut à droite du bouton attaque, plus petit
+	switch_center = Vector2(vp.x - 90, vp.y - 440)
+	# Bouton TPS : à gauche du bouton settings, en haut à droite
+	tps_center = Vector2(vp.x - 110, 80)
 
 	joy_base = Control.new()
 	add_child(joy_base)
@@ -181,6 +202,55 @@ func _ready():
 		jump_btn.draw_circle(jump_center, jump_radius, Color(0.3, 0.6, 0.9, 0.4))
 		jump_btn.draw_arc(jump_center, jump_radius, 0, TAU, 48, Color(1, 1, 1, 0.6), 2.0)
 	)
+
+	# Bouton switch d'arme : couleur dorée pour matcher l'ambiance Fallen Crown.
+	# Tap = switch vers l'arme suivante. Visuel : petit cercle + symbole "⇄"-like.
+	switch_btn = Control.new()
+	add_child(switch_btn)
+	switch_btn.draw.connect(func():
+		var col = Color(0.9, 0.75, 0.35, 0.75) if switch_pressed else Color(0.83, 0.66, 0.32, 0.5)
+		switch_btn.draw_circle(switch_center, switch_radius, col)
+		switch_btn.draw_arc(switch_center, switch_radius, 0, TAU, 32, Color(1, 1, 1, 0.6), 2.0)
+		# Dessin d'un symbole "switch" voxel : 2 petites flèches opposées
+		var c = switch_center
+		var col_arrow = Color(1, 1, 1, 0.9)
+		# Flèche gauche ←
+		switch_btn.draw_line(c + Vector2(-12, -5), c + Vector2(8, -5), col_arrow, 2.5)
+		switch_btn.draw_line(c + Vector2(-12, -5), c + Vector2(-7, -10), col_arrow, 2.5)
+		switch_btn.draw_line(c + Vector2(-12, -5), c + Vector2(-7, 0), col_arrow, 2.5)
+		# Flèche droite →
+		switch_btn.draw_line(c + Vector2(-8, 5), c + Vector2(12, 5), col_arrow, 2.5)
+		switch_btn.draw_line(c + Vector2(12, 5), c + Vector2(7, 10), col_arrow, 2.5)
+		switch_btn.draw_line(c + Vector2(12, 5), c + Vector2(7, 0), col_arrow, 2.5)
+	)
+
+	# Bouton TPS (vue 3ème personne) — œil stylisé, en haut à droite près du settings.
+	# Tap = bascule entre vue FPS et vue extérieure. Utile pour debug + futurs emotes.
+	tps_btn = Control.new()
+	add_child(tps_btn)
+	tps_btn.draw.connect(func():
+		var col_bg = Color(0.4, 0.7, 0.9, 0.7) if tps_pressed or _is_tps_active() else Color(0.25, 0.45, 0.65, 0.5)
+		tps_btn.draw_circle(tps_center, tps_radius, col_bg)
+		tps_btn.draw_arc(tps_center, tps_radius, 0, TAU, 28, Color(1, 1, 1, 0.7), 2.0)
+		# Symbole "œil" : grand cercle + petit cercle au centre
+		tps_btn.draw_arc(tps_center, 12, 0, TAU, 24, Color(1, 1, 1, 0.9), 2.0)
+		tps_btn.draw_circle(tps_center, 4, Color(1, 1, 1, 0.95))
+	)
+
+	# Label éphémère affichant le nom de l'arme active après un switch.
+	# Reste 1.5s visible puis s'efface. Positionné en bas-centre au-dessus des joysticks.
+	weapon_name_lbl = Label.new()
+	weapon_name_lbl.add_theme_font_size_override("font_size", 28)
+	weapon_name_lbl.add_theme_color_override("font_color", Color(0.95, 0.85, 0.5))
+	weapon_name_lbl.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
+	weapon_name_lbl.add_theme_constant_override("outline_size", 5)
+	weapon_name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	weapon_name_lbl.anchor_left = 0.0
+	weapon_name_lbl.anchor_right = 1.0
+	weapon_name_lbl.anchor_top = 0.75
+	weapon_name_lbl.anchor_bottom = 0.75
+	weapon_name_lbl.visible = false
+	add_child(weapon_name_lbl)
 
 	# Crosshair
 	crosshair = Control.new()
@@ -358,6 +428,15 @@ func _process(_d):
 		look_thumb.queue_redraw()
 	if atk_btn:
 		atk_btn.queue_redraw()
+	if switch_btn:
+		switch_btn.queue_redraw()
+	if tps_btn:
+		tps_btn.queue_redraw()
+	# Fade out du label d'arme affiché après un switch
+	if weapon_name_timer > 0:
+		weapon_name_timer -= _d
+		if weapon_name_timer <= 0 and weapon_name_lbl:
+			weapon_name_lbl.visible = false
 	if hit_timer > 0:
 		hit_timer -= _d
 	if hit_marker:
@@ -398,24 +477,57 @@ func _input(event):
 		if event.pressed and set_dist <= settings_radius:
 			_toggle_settings()
 			return
+		# Bouton TPS (vue 3ème personne) — à côté du settings
+		var tps_dist = event.position.distance_to(tps_center)
+		if event.pressed and tps_dist <= tps_radius:
+			tps_pressed = true
+			var pl = get_parent().player
+			if pl and pl.has_method("toggle_tps_view"):
+				pl.toggle_tps_view()
+			return
 		var atk_dist = event.position.distance_to(atk_center)
 		var jump_dist = event.position.distance_to(jump_center)
-		if event.pressed and atk_dist <= atk_radius:
+		var switch_dist = event.position.distance_to(switch_center)
+		# PRIORITÉ : switch AVANT atk/jump car il est plus petit et proche du atk.
+		if event.pressed and switch_dist <= switch_radius:
+			switch_pressed = true
+			var pl = get_parent().player
+			if pl and pl.weapon_inventory != null:
+				pl.weapon_inventory.switch_next()
+				var current = pl.weapon_inventory.get_current()
+				if current != null:
+					weapon_name_lbl.text = current.weapon_name
+					weapon_name_lbl.visible = true
+					weapon_name_timer = 1.5
+		elif event.pressed and atk_dist <= atk_radius:
 			atk_pressed = true
 			var pl = get_parent().player
-			if pl:
-				if pl.has_xbow: pl.do_shoot()
-				else: pl.do_atk()
+			if pl == null:
+				return
+			# Tap classique : passe par WeaponController qui dispatche selon l'arme active.
+			# Pour l'épée, l'animation Katana Flick (sword_combo_index=1) sera jouée par défaut.
+			# Les 3 autres styles (Conan, Overhead, Uppercut) restent codés mais inutilisés
+			# pour l'instant — ils seront branchés plus tard via 2 boutons / direction caméra / etc.
+			if pl.weapon_controller != null:
+				pl.weapon_controller.try_attack()
+			elif pl.has_xbow: pl.do_shoot()
+			else: pl.do_atk()
 		elif event.pressed and jump_dist <= jump_radius:
 			var pl = get_parent().player
 			if pl and pl.is_on_floor():
 				pl.velocity.y = 7.0
 		elif not event.pressed:
 			atk_pressed = false
+			switch_pressed = false
+			tps_pressed = false
 
 # ============================================
 # SETTINGS — ouverture/fermeture + construction extensible du panneau
 # ============================================
+
+func _is_tps_active() -> bool:
+	var pl = get_parent().player if get_parent() else null
+	return pl != null and "tps_active" in pl and pl.tps_active
 
 func _toggle_settings() -> void:
 	settings_open = not settings_open

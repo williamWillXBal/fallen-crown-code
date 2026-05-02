@@ -1053,3 +1053,31 @@ func _process(d):
 		if is_instance_valid(f):
 			var flick = sin(t * 15.0 + f.position.x * 10.0) * 0.03 + cos(t * 22.0) * 0.02
 			f.scale = Vector3.ONE * (1.0 + flick)
+
+# === DAMAGE POPUP ===
+# Affiche un nombre flottant à l'endroit indiqué qui monte dans l'air et fade out.
+# Style CODM : rouge pour dégâts normaux, jaune-doré pour gros coups (>20 dmg).
+# Appelé depuis enemy.take_damage() au moment du hit.
+# Le label est libre dans la scène (pas enfant de l'enemy) → survit si l'ennemi meurt.
+func spawn_damage_popup(world_pos: Vector3, amount: int) -> void:
+	var label = Label3D.new()
+	label.text = str(amount)
+	label.font_size = 32
+	label.outline_size = 6
+	label.modulate = Color(1.0, 0.25, 0.2) if amount < 20 else Color(1.0, 0.85, 0.3)
+	label.outline_modulate = Color(0, 0, 0, 1)
+	# Toujours face caméra, pas de blocage par les murs (visible à travers)
+	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	label.no_depth_test = true
+	label.fixed_size = true
+	label.pixel_size = 0.0015
+	label.position = world_pos
+	add_child(label)
+	# Animation : monte de 1.2m en 0.8s + fade out, puis self-destruct.
+	# Léger offset latéral random pour éviter empilement sur multi-hits.
+	var drift = Vector3(randf_range(-0.4, 0.4), 1.2, 0)
+	var tw = create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(label, "position", world_pos + drift, 0.8).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	tw.tween_property(label, "modulate:a", 0.0, 0.8).set_delay(0.2)
+	tw.chain().tween_callback(label.queue_free)

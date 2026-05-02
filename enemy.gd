@@ -291,6 +291,14 @@ func take_damage(amount: int, from: Vector3):
 	# Giclée de sang au point d'impact, dirigée dans le sens du knockback
 	spawn_blood(kb, 1.0)
 	flash_white()
+	# === DAMAGE POPUP (style CODM) ===
+	# Nombre flottant qui sort de l'ennemi et monte dans l'air en s'effaçant.
+	# Spawn comme enfant de main (pas de l'enemy) pour survivre si l'ennemi est freed.
+	var main = get_parent()
+	if main and main.has_method("spawn_damage_popup"):
+		# Position légèrement au-dessus du centre de l'ennemi, avec léger offset random
+		var popup_pos = global_position + Vector3(randf_range(-0.3, 0.3), 1.6, randf_range(-0.3, 0.3))
+		main.spawn_damage_popup(popup_pos, amount)
 	var tw = create_tween()
 	tw.tween_property(self, "scale", Vector3.ONE * 0.88, 0.05)
 	tw.tween_property(self, "scale", Vector3.ONE, 0.1)

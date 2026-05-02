@@ -13,4 +13,3 @@ En developpement actif. Version multijoueur prevue.
 
 ## Developpeur
 William - [@williamWillXBal](https://github.com/williamWillXBal)
-# Test cache
